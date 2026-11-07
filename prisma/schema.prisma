@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Cities on the world map ────────────────────────────────────────────────
+model City {
+  id           String   @id // e.g. "tehran-ir"
+  name         String
+  country      String
+  countryCode  String
+  lat          Float
+  lon          Float
+  tier         Int      // 1 = megacity, 2 = metro, 3 = town  (affects militia + production bonus)
+  ownerId      String?  // Player.id, null = neutral
+  isCapital    Boolean  @default(false)
+  troops       Float    @default(0)
+  mineLevel    Int      @default(0) // iron per tick
+  derrickLevel Int      @default(0) // oil per tick
+  factoryLevel Int      @default(0) // ammo per tick (consumes iron+oil)
+  barracksLevel Int     @default(0) // troop training speed
+  bunkerLevel  Int      @default(0) // defense multiplier
+  buildTask    String?  // JSON: { kind, targetLevel, readyAt }
+  trainTask    String?  // JSON: { amount, readyAt }
+  lastRaidAt   DateTime?
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Players (wallet-based) ─────────────────────────────────────────────────
+model Player {
+  id             String    @id @default(cuid())
+  address        String    @unique // wallet 0x...
+  name           String
+  iron           Float     @default(600)
+  oil            Float     @default(300)
+  ammo           Float     @default(200)
+  token          String?   // auth token
+  tokenExpiresAt DateTime?
+  shockUntil     DateTime? // Shock & Awe boost active until
+  wifSpent       Float     @default(0) // total WIF burned by this player
+  createdAt      DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+}
+
+// ─── Battles in flight / resolved ───────────────────────────────────────────
+model Battle {
+  id         String   @id @default(cuid())
+  fromCityId String
+  toCityId   String
+  attackerId String
+  defenderId String? // null = neutral militia
+  troopsSent Float
+  ammoSpent  Float
+  status     String   @default("inflight") // inflight | done
+  result     String? // captured | repelled
+  log        String? // JSON battle report
+  arriveAt   DateTime
+  createdAt  DateTime @default(now())
+}
+
+// ─── Verified on-chain $WIF burns ───────────────────────────────────────────
+model WifTx {
+  txHash    String   @id
+  playerId  String
+  kind      String // speedup | airlift | shock
+  amount    Float
+  createdAt DateTime @default(now())
+}
+
+// ─── Global war feed ────────────────────────────────────────────────────────
+model GameEvent {
+  id        Int      @id @default(autoincrement())
+  kind      String // join | capture | battle | build | burn | system | season
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ─── Singleton game state ───────────────────────────────────────────────────
+model GameState {
+  id          String   @id // always "main"
+  tick        Int      @default(0)
+  wifBurned   Float    @default(0)
+  seasonStart DateTime @default(now())
+}
